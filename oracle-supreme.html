@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>CabinePay - Nok'Aar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0b0c10;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #nokaar-container {
+      position: fixed;
+      bottom: 100px;
+      right: 20px;
+      z-index: 2000;
+    }
+
+    #nokaar-avatar {
+      width: 80px;
+      height: 80px;
+      background: url('nokaar.jpeg') center/cover;
+      border-radius: 50%;
+      cursor: pointer;
+      filter: drop-shadow(0 0 15px #2ecc71);
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .active-aura {
+      animation: 
+        aura-pulse 2s infinite,
+        energy-flow 3s linear infinite,
+        avatar-float 3s ease-in-out infinite;
+    }
+
+    @keyframes aura-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+    }
+
+    @keyframes energy-flow {
+      0% { box-shadow: 0 0 30px #2ecc71; }
+      50% { box-shadow: 0 0 50px #2ecc71, 0 0 70px #3498db; }
+      100% { box-shadow: 0 0 30px #2ecc71; }
+    }
+
+    @keyframes avatar-float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      33% { transform: translateY(-10px) rotate(2deg); }
+      66% { transform: translateY(5px) rotate(-1deg); }
+    }
+
+    #dialogue-interface {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid #2ecc71;
+      border-radius: 15px;
+      padding: 1.5rem;
+      max-width: 90%;
+      min-width: 300px;
+      backdrop-filter: blur(10px);
+      margin: 1rem;
+      position: fixed;
+      bottom: 200px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .message {
+      margin: 1rem 0;
+      padding: 1rem;
+      border-radius: 12px;
+      animation: message-appear 0.5s forwards;
+    }
+
+    @keyframes message-appear {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .assistant-message {
+      background: linear-gradient(45deg, #2ecc7055, #3498db33);
+      border-left: 4px solid #2ecc71;
+    }
+
+    .user-message {
+      background: linear-gradient(45deg, #3498db33, #2ecc7055);
+      border-right: 4px solid #3498db;
+      text-align: right;
+    }
+
+    #exit-button {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #e74c3c;
+      border: none;
+      border-radius: 50%;
+      padding: 10px;
+      cursor: pointer;
+      z-index: 3000;
+    }
+
+    #voice-toggle {
+      position: fixed;
+      bottom: 160px;
+      right: 30px;
+      background: #3498db;
+      border: none;
+      border-radius: 50%;
+      padding: 15px;
+      cursor: pointer;
+      z-index: 2000;
+    }
+  </style>
+</head>
+<body>
+
+  <button id="exit-button" title="Retour à l'accueil">
+    <img src="exit-icon.png" alt="Fermer" width="20">
+  </button>
+
+  <div id="nokaar-container">
+    <div id="nokaar-avatar" class="active-aura"></div>
+  </div>
+
+  <div id="dialogue-interface">
+    <div class="message assistant-message" id="assistant-msg"></div>
+    <div class="message user-message" id="user-msg"></div>
+  </div>
+
+  <button id="voice-toggle">🎤</button>
+
+  <script>
+    class NokAarAI {
+      constructor() {
+        this.conversationState = {};
+        this.recognition = null;
+        this.isListening = false;
+        this.init();
+      }
+
+      async init() {
+        await this.loadVoices();
+        this.setupControls();
+        this.greetUser();
+        this.initSpeechRecognition();
+        this.cancelAllSounds();
+      }
+
+      setupControls() {
+        document.getElementById('exit-button').addEventListener('click', () => {
+          window.location.href = "/";
+        });
+
+        document.getElementById('voice-toggle').addEventListener('click', () => {
+          this.toggleVoiceRecognition();
+        });
+      }
+
+      async loadVoices() {
+        return new Promise(resolve => {
+          speechSynthesis.onvoiceschanged = () => {
+            this.voices = speechSynthesis.getVoices();
+            resolve();
+          };
+          if (speechSynthesis.getVoices().length > 0) resolve();
+        });
+      }
+
+      cancelAllSounds() {
+        if (speechSynthesis.speaking) {
+          speechSynthesis.cancel();
+        }
+        if (this.recognition) {
+          this.recognition.stop();
+        }
+      }
+
+      greetUser() {
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
+        const message = ${greeting} et bienvenue sur CabinePay. Je suis Nok'Aar, votre assistant énergétique.;
+        this.speak(message, true);
+      }
+
+      speak(text, interrupt = false) {
+        return new Promise(resolve => {
+          if (interrupt) this.cancelAllSounds();
+          
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.voice = this.voices.find(v => v.lang === 'fr-FR') || this.voices[0];
+          utterance.pitch = 0.8;
+          utterance.rate = 0.95;
+          
+          utterance.onstart = () => {
+            document.getElementById('nokaar-avatar').classList.add('energy-surge');
+          };
+
+          utterance.onend = () => {
+            document.getElementById('nokaar-avatar').classList.remove('energy-surge');
+            resolve();
+          };
+
+          speechSynthesis.speak(utterance);
+        });
+      }
+
+      initSpeechRecognition() {
+        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+          const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          this.recognition = new Recognition();
+          this.recognition.lang = 'fr-FR';
+          this.recognition.continuous = true;
+
+          this.recognition.onresult = (event) => {
+            const transcript = Array.from(event.results)
+              .map(result => result[0].transcript)
+              .join('');
+            this.processInput(transcript);
+          };
+        }
+      }
+
+      toggleVoiceRecognition() {
+        if (!this.recognition) return;
+        
+        this.isListening = !this.isListening;
+        this.isListening ? this.recognition.start() : this.recognition.stop();
+        document.getElementById('voice-toggle').textContent = this.isListening ? '🔴' : '🎤';
+      }
+
+      processInput(text) {
+        this.showMessage(text, 'user');
+        const response = this.generateResponse(text);
+        this.speak(response);
+        this.showMessage(response, 'assistant');
+      }
+
+      generateResponse(input) {
+        input = input.toLowerCase();
+        if (input.includes('transfert')) return "Je prépare l'interface de transfert...";
+        if (input.includes('acheter')) return "Sélectionnez le type de recharge souhaité.";
+        return "Je peux vous aider avec les transferts, recharges et services financiers.";
+      }
+
+      showMessage(text, type) {
+        const element = document.createElement('div');
+        element.className = message ${type}-message;
+        element.textContent = text;
+        document.getElementById('dialogue-interface').appendChild(element);
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    // Initialisation
+    window.addEventListener('load', () => {
+      if ('speechSynthesis' in window) {
+        window.assistant = new NokAarAI();
+      } else {
+        document.getElementById('dialogue-interface').innerHTML = `
+          <div class="message assistant-message">
+            Votre navigateur ne supporte pas l'assistant vocal
+          </div>`;
+      }
+    });
+  </script>
+
+</body>
+</html>
